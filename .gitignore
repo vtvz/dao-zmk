@@ -1,0 +1,7 @@
+.west/
+build/
+ergonautkb-zmk-module/
+modules/
+sysbuild_modules.txt
+zephyr/
+zmk/
