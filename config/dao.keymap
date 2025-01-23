@@ -15,12 +15,12 @@
 #define TG   F17
 #define SPOT F18
 
-#define BASE 0
+#define QWERTY 0
 #define COLEMAK 1
 #define EXTRA 2
 #define NUM 3
 #define SYMB 4
-#define FN 4
+#define FN 5
 
 &lt { quick_tap_ms = <200>; };
 &mt { quick_tap_ms = <200>; };
@@ -29,6 +29,23 @@
     chosen {
         zmk,physical_layout = &dao_crkbd_layout;
         // zmk,physical_layout = &dao_full_layout;
+    };
+};
+
+/ {
+    behaviors {
+        tog_on: toggle_layer_on_only {
+            compatible = "zmk,behavior-toggle-layer";
+            #binding-cells = <1>;
+            display-name = "Toggle Layer On";
+            toggle-mode = "on";
+        };
+        tog_off: toggle_layer_off_only {
+            compatible = "zmk,behavior-toggle-layer";
+            #binding-cells = <1>;
+            display-name = "Toggle Layer Off";
+            toggle-mode = "off";
+        };
     };
 };
 
@@ -68,7 +85,7 @@
             #binding-cells = <0>;
             bindings
                 = <&kp CAPS>
-                , <&to COLEMAK>
+                , <&tog_on COLEMAK>
                 ;
         };
 
@@ -76,10 +93,10 @@
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings
-                = <&macro_press &kp LSHFT>
+                = <&tog_off COLEMAK>
+                , <&macro_press &kp LSHFT>
                 , <&macro_tap &kp CAPS>
                 , <&macro_release &kp LSHFT>
-                , <&to BASE>
                 ;
         };
     };
@@ -109,7 +126,7 @@
   /*|----------+----------+----------+----------+----------+----------|                        |----------+----------+----------+----------+----------+----------|*/
     &kp LGUI    &kp Z      &kp X      &kp C      &kp V      &kp B                               &kp N      &kp M      &kp COMMA   &kp DOT   &kp SLASH  &kp LBKT
   /*|----------+----------+----------+----------+----------+----------+----------|  |----------+----------+----------+----------+----------+----------+----------|*/
-                                          &lm COLEMAK LCTRL &mo NUM    &kp SPACE     &mt LSHFT RET &mo SYMB &lm COLEMAK LALT
+                                          &lm COLEMAK LCTRL &mo NUM    &kp SPACE  &mt LSHFT RET &mo SYMB   &lm COLEMAK LALT
                                               /*`--------------------------------'  `--------------------------------'*/
                         >;
                 };
@@ -164,7 +181,7 @@
   /*|----------+----------+----------+----------+----------+----------|                        |----------+----------+----------+----------+----------+----------|*/
     &trans      &kp KEE    &kp SLK    &kp TERM   &kp FF     &kp TG                              &kp UNDER  &kp EQUAL  &kp LBKT   &kp RBKT   &kp PIPE   &kp TILDE
   /*|----------+----------+----------+----------+----------+----------|                        |----------+----------+----------+----------+----------+----------|*/
-    &trans      &none      &none      &none      &none      &none                               &kp MINUS  &kp PLUS   &kp LBKT   &kp RBKT   &kp BSLH   &kp GRAVE
+    &trans      &none      &none      &ru        &en        &none                               &kp MINUS  &kp PLUS   &kp LBKT   &kp RBKT   &kp BSLH   &kp GRAVE
   /*|----------+----------+----------+----------+----------+----------+----------|  |----------+----------+----------+----------+----------+----------+----------|*/
                                                  &trans     &trans     &trans        &kp LS(RET) &trans    &kp DEL
                                               /*`--------------------------------'  `--------------------------------'*/
