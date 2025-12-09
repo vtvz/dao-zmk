@@ -1,10 +1,10 @@
 # Copyright (c) 2021 Rafael Yumagulov
 # SPDX-License-Identifier: MIT
 
-if BOARD_DAO_LEFT_PERIPHERAL
+if BOARD_DAO_LEFT
 
 config BOARD
-	default "dao_left_peripheral"
+	default "dao_left"
 
 config ZMK_SPLIT
 	default y
@@ -25,4 +25,4 @@ config USB_DEVICE_STACK
 
 endif # USB
 
-endif # BOARD_DAO_LEFT_PERIPHERAL
+endif # BOARD_DAO_LEFT

@@ -1,63 +1,82 @@
-# ZMK Firmware for Dao keyboard
+# DAO ZMK WITH DONGLE
 
-This is a repository for a ZMK Firmware for both Dao42 and Dao44 keyboards.
+Self-contained ZMK firmware configuration for Dao keyboard with dongle setup.
 
-* [main](https://github.com/yumagulovrn/dao-zmk-config/tree/main) branch is for Dao42
-* [dao44](https://github.com/yumagulovrn/dao-zmk-config/tree/dao44) branch is, obviously, for Dao44
+## Hardware Setup
 
-## Default keymap
+This configuration supports:
+- **Dongle**: Seeeduino XIAO BLE (acts as central device)
+- **Left half**: Dao left peripheral board (nRF52840)
+- **Right half**: Dao right board (nRF52840)
 
-### Dao42
+## Building Firmware
 
-Visual representation of the default keymap in keyboard-layout-editor: [KLE](http://www.keyboard-layout-editor.com/#/gists/67a81f6b83c65abcda5e7f32989a1688)
+### Prerequisites
+- Docker
+- Just (command runner)
 
-This layout is heavily inspired by [this](https://github.com/aroum/Watchman-layouts)
+### Build Commands
 
-### Dao44
+Initialize the build environment (first time only):
+```bash
+just init
+```
 
-Visual representation of the default keymap in keyboard-layout-editor: [KLE](http://www.keyboard-layout-editor.com/#/gists/c6ba0634e5b92366be9f324775394e66)
+Build all firmware files:
+```bash
+just build
+```
 
-This layout is heavily inspired by [this](https://github.com/KGOH/Jian-Info)
+Build specific board:
+```bash
+just build-part dao_left
+just build-part dao_right
+just build-part seeeduino_xiao_ble dao_dongle
+```
 
-Because of current ZMK limitations, Dao44 keymap is in the branch [dao44](https://github.com/yumagulovrn/dao-zmk-config/tree/dao44)
+## Flashing Instructions
 
-## FAQ
+### 1. Reset Settings (Important!)
 
-- [FAQ](#faq)
-  - [How to change the keymap?](#how-to-change-the-keymap)
-  - [How to flash the keyboard?](#how-to-flash-the-keyboard)
-  - [How to pair halves?](#how-to-pair-halves)
-  - [Problems](#problems)
-    - [I'm getting File Transfer Error after copying firmware to the keyboard](#im-getting-file-transfer-error-after-copying-firmware-to-the-keyboard)
+Before flashing new firmware, reset settings on all devices:
 
-### How to change the keymap?
+1. Flash `settings_reset-dao_left-zmk.uf2` to left half
+2. Flash `settings_reset-dao_right-zmk.uf2` to right half
+3. Flash `settings_reset-seeeduino_xiao_ble-zmk.uf2` to dongle
 
-1. Fork the repository https://github.com/yumagulovrn/dao-zmk-config
-2. Make changes to the [dao.keymap](../config/boards/arm/dao/dao.keymap) file in your repository OR use wonderful https://nickcoutsos.github.io/keymap-editor/
-3. Commit changes to your repository
-4. Go to `Actions` tab in your repository
-5. Wait for the GitHub Action to complete
-6. Grab `firmware.zip` file - it contains firmware for both of your halves
+### 2. Flash Main Firmware
 
-### How to flash the keyboard?
+After resetting settings, flash the main firmware:
 
-1. Obtain `firmware.zip`
-2. Unzip `firmware.zip` - you should have `dao_left.uf2` and `dao_right.uf2` files
-3. Turn off the power for selected halve (move slider to position `OFF`)
-4. Connect selected halve to the PC via USB-C cable
-5. Press `RESET` button **twice** to enter DFU mode - you should see new USB device in your file manager
-6. Copy the corresponding firmware to the root directory of the new USB device
-7. Disconnect selected halve from the PC
-8. Repeat steps 3-7 for the other halve
+1. Flash `dao_left-zmk.uf2` to left half
+2. Flash `dao_right-zmk.uf2` to right half
+3. Flash `dao_dongle-seeeduino_xiao_ble-zmk.uf2` to dongle
 
-### How to pair halves?
+### 3. Pairing
 
-1. Turn off the power for both halves (move slider to position `OFF`)
-2. Turn on the power for both halves (move slider to position `ON`)
-3. Press `RESET` button **once** on both halves **simultaneously**
+After flashing, the keyboard halves will automatically connect to the dongle via Bluetooth.
 
-### Problems
+## Configuration Files
 
-#### I'm getting File Transfer Error after copying firmware to the keyboard
+- `config/dao.keymap` - Keymap configuration
+- `config/dao.conf` - Global configuration
+- `config/boards/arm/dao_left/` - Left half board definition
+- `config/boards/arm/dao_right/` - Right half board definition
+- `config/boards/shields/dao_dongle/` - Dongle shield configuration
 
-It's OK. Proof: https://zmk.dev/docs/troubleshooting#file-transfer-error
+## Architecture
+
+This configuration is completely self-contained and does not depend on external ZMK modules:
+
+- All board definitions are local in `config/boards/`
+- Dongle uses mock kscan (no physical keys)
+- Left and right halves act as BLE peripherals
+- Dongle acts as BLE central, forwarding key presses via USB
+
+## Build Output
+
+After building, you'll find the following files in `build/`:
+- `dao_dongle-seeeduino_xiao_ble-zmk.uf2` - Dongle firmware
+- `dao_left-zmk.uf2` - Left half firmware
+- `dao_right-zmk.uf2` - Right half firmware
+- `settings_reset-*.uf2` - Settings reset firmware for each device

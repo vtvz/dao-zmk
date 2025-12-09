@@ -11,11 +11,11 @@ include:
   - board: seeeduino_xiao_ble
     shield: dao_dongle
   # Left half - peripheral board variant for dongle
-  - board: dao_left_peripheral
+  - board: dao_left
   # Right half - peripheral
   - board: dao_right
   # Settings reset for all devices
-  - board: dao_left_peripheral
+  - board: dao_left
     shield: settings_reset
   - board: dao_right
     shield: settings_reset
