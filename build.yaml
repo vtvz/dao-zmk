@@ -1,31 +1,23 @@
 # This file generates the GitHub Actions matrix
-# For simple board + shield combinations, add them
-# to the top level board and shield arrays, for more
-# control, add individual board + shield combinations to
-# the `include` property, e.g:
+# For Dao keyboard with dongle setup
 #
-# board: [ "nice_nano_v2" ]
-# shield: [ "corne_left", "corne_right" ]
-# include:
-#   - board: bdn9_rev2
-#   - board: nice_nano_v2
-#     shield: reviung41
+# Dongle: seeeduino_xiao_ble + dao_dongle shield (central)
+# Left half: dao_left board (peripheral when using dongle)
+# Right half: dao_right board (peripheral)
 #
 ---
 include:
+  # Dongle (central device)
   - board: seeeduino_xiao_ble
-    shield: corne_central_dongle
-  # - board: nice_nano_v2
-  #   shield: corne_central_dongle
-  # - board: nice_nano_v2
-  #   shield: corne_central_left
-  - board: nice_nano_v2
-    shield: corne_peripheral_left
-    cmake-args: -DCONFIG_ZMK_SPLIT=y -DCONFIG_ZMK_SPLIT_ROLE_CENTRAL=n
-  - board: nice_nano_v2
-    shield: corne_peripheral_right
-    cmake-args: -DCONFIG_ZMK_SPLIT=y -DCONFIG_ZMK_SPLIT_ROLE_CENTRAL=n
-  - board: nice_nano_v2
+    shield: dao_dongle
+  # Left half - peripheral board variant for dongle
+  - board: dao_left_peripheral
+  # Right half - peripheral
+  - board: dao_right
+  # Settings reset for all devices
+  - board: dao_left_peripheral
+    shield: settings_reset
+  - board: dao_right
     shield: settings_reset
   - board: seeeduino_xiao_ble
     shield: settings_reset
