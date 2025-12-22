@@ -3,26 +3,20 @@
 
 if BOARD_DAO_LEFT
 
-config BOARD
-	default "dao_left"
-
 config ZMK_SPLIT
 	default y
-
-config BT_CTLR
-	default BT
 
 config ZMK_BATTERY_VOLTAGE_DIVIDER
 	default y
 
-if USB
+if USB_DEVICE_DRIVER
 
 config USB_NRFX
 	default y
 
-config USB_DEVICE_STACK
-	default y
+endif # USB_DEVICE_DRIVER
 
-endif # USB
+config BT_CTLR
+	default BT
 
 endif # BOARD_DAO_LEFT
