@@ -1,3 +1,23 @@
+# This file generates the GitHub Actions matrix
+# For Dao keyboard with dongle setup
+#
+# Dongle: seeeduino_xiao_ble + dao_dongle shield (central)
+# Left half: dao_left board (peripheral when using dongle)
+# Right half: dao_right board (peripheral)
+#
+---
 include:
+  # Dongle (central device)
+  - board: xiao_ble
+    shield: dao_dongle
+  # Left half - peripheral board variant for dongle
   - board: dao_left
+  # Right half - peripheral
   - board: dao_right
+  # Settings reset for all devices
+  - board: dao_left
+    shield: settings_reset
+  - board: dao_right
+    shield: settings_reset
+  - board: xiao_ble
+    shield: settings_reset

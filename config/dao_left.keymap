@@ -1,0 +1,14 @@
+/*
+ * Copyright (c) 2021 Rafael Yumagulov
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/ {
+    chosen {
+        zmk,physical_layout = &dao_crkbd_layout;
+        // zmk,physical_layout = &dao_full_layout;
+    };
+};
+
+#include "dao.keymap"

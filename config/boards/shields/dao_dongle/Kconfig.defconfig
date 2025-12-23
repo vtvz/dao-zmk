@@ -1,0 +1,15 @@
+# Copyright (c) 2021 Rafael Yumagulov
+# SPDX-License-Identifier: MIT
+
+if SHIELD_DAO_DONGLE
+
+config ZMK_KEYBOARD_NAME
+    default "dao_dongle"
+
+config ZMK_SPLIT_ROLE_CENTRAL
+    default y
+
+config ZMK_SPLIT
+    default y
+
+endif

@@ -1,0 +1,10 @@
+/*
+ * Copyright (c) 2021 Rafael Yumagulov
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+// Dongle doesn't have physical layout (uses mock kscan)
+// but needs the same keymap as the halves to properly forward key presses
+
+#include "dao.keymap"
