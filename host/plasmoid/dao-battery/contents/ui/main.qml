@@ -38,7 +38,6 @@ PlasmoidItem {
     }
 
     function poll() {
-        // reconnect triggers a fresh run of the command
         executable.connectSource(root.readCmd)
     }
 
@@ -54,57 +53,93 @@ PlasmoidItem {
         return (v === null || v === undefined) ? "—" : (v + "%")
     }
 
-    function iconFor(v) {
-        if (v === null || v === undefined) return "battery-missing"
-        var lvl = Math.round(v / 10) * 10
-        if (lvl > 100) lvl = 100
-        if (lvl < 0) lvl = 0
-        return "battery-" + (lvl < 10 ? "0" : "") + lvl
+    function colorFor(v) {
+        if (v === null || v === undefined) return Kirigami.Theme.disabledTextColor
+        if (v < 10) return Kirigami.Theme.negativeTextColor   // red below 10%
+        if (v <= 30) return Kirigami.Theme.neutralTextColor   // amber when low
+        return Kirigami.Theme.highlightColor
+    }
+
+    // A thin vertical bar that fills from the bottom by percentage.
+    component FillBar: Item {
+        id: bar
+        property var pct: null
+        property string tag: ""
+
+        Rectangle {
+            id: track
+            anchors.fill: parent
+            radius: width / 2
+            color: "transparent"
+            border.width: Math.max(1, width * 0.18)
+            border.color: Kirigami.ColorUtils.linearInterpolation(
+                Kirigami.Theme.backgroundColor, Kirigami.Theme.textColor, 0.35)
+
+            Rectangle {
+                id: fill
+                anchors {
+                    left: parent.left; right: parent.right; bottom: parent.bottom
+                    margins: track.border.width + 1
+                }
+                readonly property real p: (bar.pct === null || bar.pct === undefined)
+                    ? 0 : Math.max(0, Math.min(100, bar.pct)) / 100
+                height: (parent.height - 2 * (track.border.width + 1)) * p
+                radius: width / 2
+                color: root.colorFor(bar.pct)
+                Behavior on height { NumberAnimation { duration: 200 } }
+            }
+        }
+    }
+
+    // Compact unit: left bar, keyboard glyph, right bar — [L] ⌨ [R].
+    component Gauge: RowLayout {
+        id: gauge
+        property real cell: Kirigami.Units.iconSizes.smallMedium
+        spacing: Math.round(cell * 0.18)
+        readonly property real barWidth: Math.max(4, gauge.cell * 0.42)
+
+        FillBar {
+            pct: root.leftPct; tag: "L"
+            Layout.preferredWidth: gauge.barWidth
+            Layout.preferredHeight: gauge.cell
+            opacity: root.connected ? 1.0 : 0.45
+        }
+        Kirigami.Icon {
+            source: "input-keyboard"
+            Layout.preferredWidth: gauge.cell
+            Layout.preferredHeight: gauge.cell
+            opacity: root.connected ? 0.9 : 0.4
+        }
+        FillBar {
+            pct: root.rightPct; tag: "R"
+            Layout.preferredWidth: gauge.barWidth
+            Layout.preferredHeight: gauge.cell
+            opacity: root.connected ? 1.0 : 0.45
+        }
     }
 
     // ---- Panel (compact) ----
     compactRepresentation: MouseArea {
-        Layout.minimumWidth: compactRow.implicitWidth + Kirigami.Units.smallSpacing * 2
+        id: compact
         onClicked: root.expanded = !root.expanded
 
-        RowLayout {
-            id: compactRow
-            anchors.centerIn: parent
-            spacing: Kirigami.Units.smallSpacing
+        readonly property bool horizontal: compact.height <= compact.width
+        readonly property real thin: horizontal ? compact.height : compact.width
 
-            RowLayout {
-                spacing: 2
-                Kirigami.Icon {
-                    source: root.iconFor(root.leftPct)
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                    opacity: root.connected ? 1.0 : 0.4
-                }
-                PlasmaComponents.Label {
-                    text: "L " + root.fmt(root.leftPct)
-                    opacity: root.connected ? 1.0 : 0.4
-                }
-            }
-            RowLayout {
-                spacing: 2
-                Kirigami.Icon {
-                    source: root.iconFor(root.rightPct)
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.small
-                    opacity: root.connected ? 1.0 : 0.4
-                }
-                PlasmaComponents.Label {
-                    text: "R " + root.fmt(root.rightPct)
-                    opacity: root.connected ? 1.0 : 0.4
-                }
-            }
+        Layout.preferredWidth: gaugeItem.implicitWidth
+        Layout.preferredHeight: thin
+
+        Gauge {
+            id: gaugeItem
+            anchors.centerIn: parent
+            cell: compact.thin
         }
     }
 
     // ---- Popup (full) ----
     fullRepresentation: ColumnLayout {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 14
-        Layout.minimumHeight: Kirigami.Units.gridUnit * 8
+        Layout.minimumHeight: Kirigami.Units.gridUnit * 9
         spacing: Kirigami.Units.largeSpacing
 
         PlasmaComponents.Label {
@@ -122,28 +157,38 @@ PlasmoidItem {
             text: "Dongle not connected"
         }
 
-        GridLayout {
+        RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            columns: 3
-            rowSpacing: Kirigami.Units.largeSpacing
-            columnSpacing: Kirigami.Units.largeSpacing
+            spacing: Kirigami.Units.gridUnit * 3
             visible: root.connected
 
-            Kirigami.Icon {
-                source: root.iconFor(root.leftPct)
-                Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                Layout.preferredHeight: Kirigami.Units.iconSizes.medium
+            Repeater {
+                model: [
+                    { tag: "Left",  pct: root.leftPct },
+                    { tag: "Right", pct: root.rightPct }
+                ]
+                delegate: ColumnLayout {
+                    id: half
+                    required property var modelData
+                    spacing: Kirigami.Units.smallSpacing
+                    FillBar {
+                        pct: half.modelData.pct
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 1.2
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 4
+                    }
+                    PlasmaComponents.Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: root.fmt(half.modelData.pct)
+                        font.bold: true
+                    }
+                    PlasmaComponents.Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: half.modelData.tag
+                        opacity: 0.75
+                    }
+                }
             }
-            PlasmaComponents.Label { text: "Left" }
-            PlasmaComponents.Label { text: root.fmt(root.leftPct); font.bold: true }
-
-            Kirigami.Icon {
-                source: root.iconFor(root.rightPct)
-                Layout.preferredWidth: Kirigami.Units.iconSizes.medium
-                Layout.preferredHeight: Kirigami.Units.iconSizes.medium
-            }
-            PlasmaComponents.Label { text: "Right" }
-            PlasmaComponents.Label { text: root.fmt(root.rightPct); font.bold: true }
         }
     }
 }

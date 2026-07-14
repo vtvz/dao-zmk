@@ -55,3 +55,9 @@ build:
   echo "All builds completed!"
   ls -la build/*.uf2
   echo "=========================================="
+
+# Install/upgrade the KDE Plasma battery widget and reload plasmashell
+widget-install:
+  kpackagetool6 --type Plasma/Applet --upgrade host/plasmoid/dao-battery
+  kquitapp6 plasmashell
+  kstart plasmashell
