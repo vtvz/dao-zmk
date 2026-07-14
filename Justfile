@@ -12,11 +12,15 @@ build-part board shield="" cmake_args="":
   shield="{{ shield }}"
   cmake_args="{{ cmake_args }}"
 
+  # Board ids can contain '/' (Zephyr variants, e.g. xiao_ble//zmk). Keep the
+  # real id for `-b`, but flatten '/' -> '_' for build dir / output filenames.
+  board_slug="${board//\//_}"
+
   if [ -n "$shield" ]; then
-    build_name="${shield}-${board}"
+    build_name="${shield}-${board_slug}"
     shield_arg="-DSHIELD=${shield}"
   else
-    build_name="${board}"
+    build_name="${board_slug}"
     shield_arg=""
   fi
 
