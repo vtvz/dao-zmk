@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "vtvz.ru@gmail.com",
+                "Name": "Vitaly"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Shows left/right battery levels of the Dao split keyboard",
+        "Icon": "battery",
+        "Id": "com.vtvz.dao-battery",
+        "License": "MIT",
+        "Name": "Dao Keyboard Battery",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -5,3 +5,7 @@ modules/
 sysbuild_modules.txt
 zephyr/
 zmk/
+
+# Python
+__pycache__/
+*.pyc
