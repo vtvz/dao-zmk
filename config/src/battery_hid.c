@@ -8,13 +8,14 @@
  *           battery event. Read by our host reader/widget, which finds it by
  *           the report-descriptor prefix 06 00 ff.
  *
- *   HID_2 — standard battery interface (Usage Page 0x06 Generic Device
- *           Controls, Usage 0x20 Battery Strength) exposed as a FEATURE
- *           report. The Linux kernel's hid-input driver auto-maps this to a
- *           power_supply entry (visible in upower / the system tray) exactly
- *           like a wireless mouse. HID has no notion of two batteries, so this
- *           single value is the WORSE of the two halves (min), i.e. "charge
- *           when this hits low". Served on demand via the get_report callback.
+ *   HID_2 — standard battery: the Generic Device Controls "Battery Strength"
+ *           usage (0x06/0x20) in an INPUT report, wrapped in a minimal dummy
+ *           keyboard (see below). The Linux kernel's hid-input driver auto-maps
+ *           it to a power_supply entry (visible in upower / the system tray)
+ *           like a wireless mouse/keyboard. HID has no notion of two batteries,
+ *           so this single value is the WORSE of the two halves (min), i.e.
+ *           "charge when this hits low". Pushed on change; also readable via
+ *           GET_REPORT (feature).
  *
  * Dongle (central) build only. Requires CONFIG_USB_HID_DEVICE_COUNT=3.
  */
@@ -56,54 +57,42 @@ static const uint8_t vendor_report_desc[] = {
     0xC0,             /* End Collection                                 */
 };
 
-/* ---- HID_2: standard battery, carried on a dummy mouse interface --------- */
+/* ---- HID_2: standard battery, carried on a dummy keyboard interface ------ */
 /*
  * The kernel maps the Battery Strength usage to a power_supply only when the
  * interface ALSO registers a real input device — hidinput_has_been_populated()
  * ignores EV_PWR, so a battery-only interface is torn down and the battery
- * orphaned. A bare Button page inside a GenDevCtrls collection wasn't enough
- * (hid-generic didn't populate an input device from it).
+ * orphaned. A bare Button page inside a GenDevCtrls collection wasn't enough.
  *
- * So we present a minimal *mouse* (Generic Desktop / Mouse / Pointer — the
- * exact shape wireless mice use, which hid-generic always turns into an input
- * device) and append the Battery Strength usage in the same input report. The
- * mouse never moves (we always send zeros); it exists only so the input device
- * registers and the battery survives.
+ * So we present a minimal *keyboard* (Generic Desktop / Keyboard — which
+ * hid-generic always turns into an input device) and append the Battery
+ * Strength usage in the same input report. The keyboard reports only its
+ * modifier byte (always 0, no key can be pressed); it exists solely so the
+ * input device registers and the battery survives. A keyboard (vs a mouse) is
+ * used so the phantom device reads as a keyboard battery — semantically apt.
  *
- * INPUT report layout (Report ID 2): [buttons(1B, always 0), x(1B,0), y(1B,0),
+ * INPUT report layout (Report ID 2): [modifiers(1B, always 0), reserved(1B,0),
  * battery%(1B)]. A Feature copy of just the battery byte is also offered.
  */
 #define REPORT_ID_STDBATT 0x02
 
 static const uint8_t battery_report_desc[] = {
     0x05, 0x01,       /* Usage Page (Generic Desktop)                   */
-    0x09, 0x02,       /* Usage (Mouse)                                  */
+    0x09, 0x06,       /* Usage (Keyboard)                               */
     0xA1, 0x01,       /* Collection (Application)                       */
     0x85, REPORT_ID_STDBATT, /*   Report ID (2)                         */
-    0x09, 0x01,       /*   Usage (Pointer)                              */
-    0xA1, 0x00,       /*   Collection (Physical)                        */
-    /* 3 buttons (always 0) */
-    0x05, 0x09,       /*     Usage Page (Button)                        */
-    0x19, 0x01,       /*     Usage Minimum (1)                          */
-    0x29, 0x03,       /*     Usage Maximum (3)                          */
-    0x15, 0x00,       /*     Logical Minimum (0)                        */
-    0x25, 0x01,       /*     Logical Maximum (1)                        */
-    0x75, 0x01,       /*     Report Size (1)                            */
-    0x95, 0x03,       /*     Report Count (3)                           */
-    0x81, 0x02,       /*     Input (Data,Var,Abs)                       */
-    0x75, 0x05,       /*     Report Size (5) padding                    */
-    0x95, 0x01,       /*     Report Count (1)                           */
-    0x81, 0x03,       /*     Input (Const)                              */
-    /* X / Y (always 0) */
-    0x05, 0x01,       /*     Usage Page (Generic Desktop)               */
-    0x09, 0x30,       /*     Usage (X)                                  */
-    0x09, 0x31,       /*     Usage (Y)                                  */
-    0x15, 0x81,       /*     Logical Minimum (-127)                     */
-    0x25, 0x7F,       /*     Logical Maximum (127)                      */
-    0x75, 0x08,       /*     Report Size (8)                            */
-    0x95, 0x02,       /*     Report Count (2)                           */
-    0x81, 0x06,       /*     Input (Data,Var,Rel)                       */
-    0xC0,             /*   End Collection (Physical)                    */
+    /* Modifier byte (8 bits, always 0) — makes hid-generic build an input dev */
+    0x05, 0x07,       /*   Usage Page (Keyboard/Keypad)                 */
+    0x19, 0xE0,       /*   Usage Minimum (Left Control)                 */
+    0x29, 0xE7,       /*   Usage Maximum (Right GUI)                    */
+    0x15, 0x00,       /*   Logical Minimum (0)                          */
+    0x25, 0x01,       /*   Logical Maximum (1)                          */
+    0x75, 0x01,       /*   Report Size (1)                              */
+    0x95, 0x08,       /*   Report Count (8)                             */
+    0x81, 0x02,       /*   Input (Data,Var,Abs) — modifiers             */
+    0x75, 0x08,       /*   Report Size (8)                              */
+    0x95, 0x01,       /*   Report Count (1)                             */
+    0x81, 0x03,       /*   Input (Const) — reserved byte                */
     /* Battery Strength in the same input report */
     0x05, 0x06,       /*   Usage Page (Generic Device Controls)         */
     0x09, 0x20,       /*   Usage (Battery Strength)                     */
@@ -167,10 +156,10 @@ static int send_vendor_report(void)
 
 static K_SEM_DEFINE(battery_sem, 1, 1);
 
-/* Pushed INPUT report: [id, buttons=0, x=0, y=0, battery%]. The mouse fields
- * stay zero; only the last byte (battery) ever changes. */
-#define BATT_BYTE_INDEX 4
-static uint8_t battery_report[5] = { REPORT_ID_STDBATT, 0, 0, 0, 0 };
+/* Pushed INPUT report: [id, modifiers=0, reserved=0, battery%]. The keyboard
+ * fields stay zero; only the last byte (battery) ever changes. */
+#define BATT_BYTE_INDEX 3
+static uint8_t battery_report[4] = { REPORT_ID_STDBATT, 0, 0, 0 };
 
 static void battery_int_in_ready_cb(const struct device *dev)
 {
