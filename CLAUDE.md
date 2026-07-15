@@ -13,30 +13,35 @@ Web-search before changing config or asserting a root cause. ZMK/Zephyr change b
 All builds run inside the `zmkfirmware/zmk-build-arm:stable` Docker image via `just`. Requires Docker, `just`, `yq`, `jq`.
 
 ```bash
-just init                          # First-time only: clone zmk, west init/update (populates gitignored deps)
-just build                         # Build every target in build.yaml, output to build/*.uf2
-just build-part dao_left           # Build a single board (no shield)
-just build-part xiao_ble dao_dongle    # Build a board + shield
+just init                                # First-time only: clone zmk, west init/update (populates gitignored deps)
+just build                               # Build every target in build.yaml, output to build/*.uf2
+just build-part dao_left                 # Build a single board (no shield)
+just build-part xiao_ble//zmk dao_dongle # Build a board + shield
 just build-part dao_left settings_reset
+just widget-install                      # (host) reinstall the KDE Plasma battery widget + reload plasmashell
 ```
 
-`just build` wipes `build/*.uf2` first, reads the matrix from `build.yaml`, and calls `build-part` for each entry. Output naming: `<shield>-<board>-zmk.uf2`, or `<board>-zmk.uf2` when there's no shield.
+`just build` wipes `build/*.uf2` first, reads the matrix from `build.yaml`, and calls `build-part` for each entry. Output naming: `<shield>-<board_slug>-zmk.uf2`, or `<board_slug>-zmk.uf2` when there's no shield, where `board_slug` is the board id with `/` flattened to `_` (so the dongle output is `dao_dongle-xiao_ble__zmk-zmk.uf2`).
 
-There are no tests or linters in this repo — validation is "does it build."
+**Dongle board id must be `xiao_ble//zmk`, not plain `xiao_ble`.** Since Zephyr 4.1, ZMK's board defaults (`CONFIG_ZMK_BLE`, `CONFIG_ZMK_USB`) live in the `/zmk` board _variant_. Building the dongle as plain `xiao_ble` produces firmware **with no BLE central** — the halves silently fail to connect. `build.yaml` uses `xiao_ble//zmk` for the dongle and its settings_reset.
+
+There are no tests or linters in this repo — validation is "does it build." (QML in `host/plasmoid/` can be checked with `qmllint`.)
 
 ## Build dependencies (gitignored, not source)
 
-`zmk/`, `zephyr/`, `modules/`, `.west/`, `ergonautkb-zmk-module/`, and `build/` are all gitignored and populated by `just init` / west. **Do not edit them** — they are upstream checkouts. The only source lives in `config/`, plus the top-level `Justfile`, `build.yaml`, and `.github/workflows/build.yml`. `config/west.yml` pins zmk to `revision: main`.
+`zmk/`, `zephyr/`, `modules/`, `.west/`, `ergonautkb-zmk-module/`, and `build/` are all gitignored and populated by `just init` / west. **Do not edit them** — they are upstream checkouts. The only source lives in `config/` and `host/`, plus the top-level `Justfile`, `build.yaml`, and `.github/workflows/build.yml`. `config/west.yml` pins zmk to `revision: main`.
 
 ## Architecture
 
 **Three firmware targets, one keymap.** `config/dao.keymap` is the single source of truth for all layers, behaviors, and macros. Each target includes it:
+
 - `dao_left.keymap` / `dao_right.keymap` — select a physical layout via `chosen { zmk,physical_layout = &dao_crkbd_layout; }`, then `#include "dao.keymap"`.
 - `dao_dongle.keymap` — just `#include "dao.keymap"`; the dongle has no physical layout. **The dongle must carry the same keymap as the halves** because it's the central that resolves and forwards keystrokes over USB.
 
 When editing keymap behavior, edit `dao.keymap` — never duplicate into the per-board files.
 
 **Split roles** are set in tiny per-target `.conf` files; everything else is shared in `config/dao.conf`:
+
 - `dao_left.conf` / `dao_right.conf` → `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=n` (peripheral)
 - `boards/shields/dao_dongle/dao_dongle.conf` → `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` (central)
 - `config/dao.conf` holds all shared BLE / power / debounce / mouse settings. ZMK silently ignores settings that don't apply to a given role (peripheral-only, central-only, USB-only, battery-only), so one shared file is intentional. Mouse support (`CONFIG_ZMK_MOUSE=y`) is required for the `mmv`/`msc`/`mkp` behaviors used in the FN layer.
@@ -47,6 +52,21 @@ When editing keymap behavior, edit `dao.keymap` — never duplicate into the per
 
 **Layer model** (in `dao.keymap`): QWERTY is the base; COLEMAK is a toggle-on overlay activated at boot and via the `en` macro (CAPS + `tog_on COLEMAK`), turned off by the `ru` macro. NUM + SYMB held together activate FN via `conditional_layers` (tri-layer). The `lm` macro emulates QMK's `LM()` (momentary layer + held modifier).
 
+## Per-half battery over USB → host widget
+
+ZMK reports battery only over the **BLE HID Battery Service**, never over USB HID — so a USB-connected dongle can't surface the halves' battery to the host through the standard channel. This repo adds that path (based on `bogamie/zmk-split-battery-tray`):
+
+- **Firmware** `config/src/battery_hid.c` (dongle-only, gated on `CONFIG_ZMK_SPLIT_BATTERY_HID_REPORT` defined in the dao_dongle `Kconfig.defconfig`, compiled via `config/CMakeLists.txt`). It adds a **second USB HID interface** (vendor Usage Page `0xFF00`) and pushes a 3-byte report `[0x01, left%, right%]` (`0xFF` = unknown) on each peripheral battery event. Requires `CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING=y` and `CONFIG_USB_HID_DEVICE_COUNT=2` (in `dao_dongle.conf`).
+- **Events fire only on change.** ZMK's `battery.c` raises `battery_state_changed` only when the percentage differs from last — `CONFIG_ZMK_BATTERY_REPORT_INTERVAL` (60s here) controls measurement, not emission. A freshly started host reader therefore shows nothing until the first change.
+
+**Host side (`host/`, KDE Plasma 6 on Linux):**
+
+- `host/reader/dao-battery-reader.py` — finds the vendor HID interface **by report-descriptor prefix `06 00 ff`** (the `/dev/hidrawN` number is NOT stable across replug/reflash — never hardcode it), blocking-reads reports, writes `~/.local/state/dao-battery.json`.
+- `host/systemd/dao-battery-reader.service` — runs the reader as a user service.
+- `host/plasmoid/dao-battery/` — Plasma 6 plasmoid. Reads the state file via a `plasma5support` **executable DataSource** (plasmashell blocks `file://` XHR). Compact rep = keyboard glyph flanked by two L/R fill bars; popup mirrors them.
+- `host/udev/99-dao-dongle-battery.rules` — grants access via `GROUP="input"` (add user with `usermod -aG input`). NOT via `TAG+="uaccess"`: systemd 258+ has a regression where uaccess ACLs aren't applied to `/dev/hidraw*`.
+- `host/install.sh` — installs all of the above; `just widget-install` reinstalls just the plasmoid.
+
 ## Flashing order
 
-Reset settings on **all three** devices first (`settings_reset-*.uf2`), then flash main firmware (`dao_left-zmk.uf2`, `dao_right-zmk.uf2`, `dao_dongle-xiao_ble-zmk.uf2`). Halves auto-connect to the dongle over BLE. See README.md for the full procedure.
+Reset settings on **all three** devices first (`settings_reset-*.uf2`), then flash main firmware (`dao_left-zmk.uf2`, `dao_right-zmk.uf2`, `dao_dongle-xiao_ble__zmk-zmk.uf2`). Halves auto-connect to the dongle over BLE. After a settings reset, re-pair by resetting the dongle and a half at nearly the same time. See README.md for the full procedure.
