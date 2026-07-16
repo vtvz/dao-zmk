@@ -6,8 +6,9 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-# %h expands to the user's home; adjust the path if you cloned elsewhere.
-ExecStart=/usr/bin/python3 %h/Projects/PetProjects/keyboard/dao-zmk/host/reader/dao-battery-reader.py
+# The reader is installed to ~/.local/bin by install.sh / `just widget-install`
+# (%h = user home), so this is independent of where the repo is cloned.
+ExecStart=/usr/bin/python3 %h/.local/bin/dao-battery-reader.py
 Environment=DAO_BATTERY_STATE=%h/.local/state/dao-battery.json
 Restart=always
 RestartSec=3

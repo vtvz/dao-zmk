@@ -20,7 +20,9 @@ if ! id -nG "$USER" | tr ' ' '\n' | grep -qx input; then
     NEED_RELOGIN=1
 fi
 
-echo "==> Installing reader user service"
+echo "==> Installing reader + user service"
+mkdir -p "$HOME/.local/bin"
+install -m 0755 "$HERE/reader/dao-battery-reader.py" "$HOME/.local/bin/dao-battery-reader.py"
 mkdir -p "$HOME/.config/systemd/user"
 cp "$HERE/systemd/dao-battery-reader.service" "$HOME/.config/systemd/user/"
 systemctl --user daemon-reload

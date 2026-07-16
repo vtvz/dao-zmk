@@ -56,8 +56,18 @@ build:
   ls -la build/*.uf2
   echo "=========================================="
 
-# Install/upgrade the KDE Plasma battery widget and reload plasmashell
+# (host) Reinstall the reader + user service + KDE widget, then restart both.
 widget-install:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # Reader script -> ~/.local/bin (matches the service's ExecStart)
+  install -Dm 0755 host/reader/dao-battery-reader.py "$HOME/.local/bin/dao-battery-reader.py"
+  # User service -> reload + restart so changes take effect
+  install -Dm 0644 host/systemd/dao-battery-reader.service \
+    "$HOME/.config/systemd/user/dao-battery-reader.service"
+  systemctl --user daemon-reload
+  systemctl --user restart dao-battery-reader.service
+  # Plasma widget -> upgrade + reload plasmashell
   kpackagetool6 --type Plasma/Applet --upgrade host/plasmoid/dao-battery
-  kquitapp6 plasmashell
+  kquitapp6 plasmashell || true
   kstart plasmashell
