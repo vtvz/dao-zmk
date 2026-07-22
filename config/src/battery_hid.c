@@ -133,18 +133,28 @@ static const struct hid_ops vendor_ops = {
     .int_in_ready = vendor_int_in_ready_cb,
 };
 
+/* buf is static so it outlives the async USB write (nrfx doesn't copy it —
+ * a stack buffer would be a data race). Only touched from the work queue. */
+static uint8_t vendor_buf[3] = { REPORT_ID_BATTERY, 0, 0 };
+
 static int send_vendor_report(void)
 {
     if (!vendor_dev) {
         return -ENODEV;
     }
-    uint8_t buf[3] = { REPORT_ID_BATTERY, levels[0], levels[1] };
-
+    /* The int_in_ready completion returns this semaphore. If a previous write
+     * raced a USB disconnect, that completion never fires and the semaphore is
+     * stranded (a documented Zephyr legacy-stack issue). So on timeout we
+     * reset it rather than blocking forever — the next send then proceeds. */
     if (k_sem_take(&report_sem, K_MSEC(100)) != 0) {
-        LOG_WRN("battery report semaphore busy");
-        return -EBUSY;
+        /* Reset leaves the count at 0 (i.e. taken), which is the state we want
+         * to proceed with the write below. */
+        LOG_WRN("vendor report sem stranded; resetting");
+        k_sem_reset(&report_sem);
     }
-    int err = hid_int_ep_write(vendor_dev, buf, sizeof(buf), NULL);
+    vendor_buf[1] = levels[0];
+    vendor_buf[2] = levels[1];
+    int err = hid_int_ep_write(vendor_dev, vendor_buf, sizeof(vendor_buf), NULL);
     if (err) {
         k_sem_give(&report_sem);
         LOG_ERR("hid_int_ep_write failed: %d", err);
@@ -194,8 +204,10 @@ static int send_battery_report(void)
         return -ENODEV;
     }
     if (k_sem_take(&battery_sem, K_MSEC(100)) != 0) {
-        LOG_WRN("std battery report semaphore busy");
-        return -EBUSY;
+        /* Recover a semaphore stranded by a write racing a USB disconnect
+         * (see send_vendor_report). Reset leaves it taken, ready for the write. */
+        LOG_WRN("std battery report sem stranded; resetting");
+        k_sem_reset(&battery_sem);
     }
     battery_report[BATT_BYTE_INDEX] = combined_level();
     int err = hid_int_ep_write(battery_dev, battery_report, sizeof(battery_report), NULL);
@@ -243,6 +255,39 @@ static int zmk_split_battery_hid_init(void)
 }
 
 SYS_INIT(zmk_split_battery_hid_init, APPLICATION, 91);
+
+/* ---- periodic re-send -------------------------------------------------- */
+/*
+ * ZMK only raises battery events on change, so a host reader that connects
+ * between changes would see nothing for a long time. Re-send the current
+ * values on a timer so a freshly-connected reader/widget shows status within
+ * one interval instead of waiting for the next battery change. The USB writes
+ * must run in a work item, not the timer ISR.
+ */
+#define RESEND_INTERVAL_S 3
+
+static void resend_work_cb(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    send_vendor_report();
+    send_battery_report();
+}
+K_WORK_DEFINE(resend_work, resend_work_cb);
+
+static void resend_timer_cb(struct k_timer *timer)
+{
+    ARG_UNUSED(timer);
+    k_work_submit(&resend_work);
+}
+K_TIMER_DEFINE(resend_timer, resend_timer_cb, NULL);
+
+static int start_resend_timer(void)
+{
+    k_timer_start(&resend_timer, K_SECONDS(RESEND_INTERVAL_S), K_SECONDS(RESEND_INTERVAL_S));
+    return 0;
+}
+
+SYS_INIT(start_resend_timer, APPLICATION, 92);
 
 static int battery_listener(const zmk_event_t *eh)
 {

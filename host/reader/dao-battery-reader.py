@@ -25,7 +25,11 @@ import sys
 import time
 from pathlib import Path
 
-# Vendor report descriptor starts with: Usage Page (Vendor 0xFF00)
+# The dongle's vendor interface: USB VID:PID + report-descriptor prefix.
+# Both are needed — the 0x06 0x00 0xFF vendor prefix alone also matches other
+# devices (e.g. a Logitech receiver), so we additionally require our VID:PID.
+DONGLE_VID = 0x1D50
+DONGLE_PID = 0x615E
 VENDOR_DESC_PREFIX = bytes([0x06, 0x00, 0xFF])
 REPORT_ID = 0x01
 UNKNOWN = 0xFF
@@ -43,17 +47,39 @@ STATE_PATH = Path(os.environ.get("DAO_BATTERY_STATE", default_state_path()))
 STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
+def hidraw_vid_pid(sys_path):
+    """Return (vid, pid) for a hidraw sysfs dir, or None if unreadable.
+
+    The device's uevent has a line like: HID_ID=0003:00001D50:0000615E
+    (bus:vid:pid, hex).
+    """
+    uevent = Path(sys_path) / "device" / "uevent"
+    try:
+        for line in uevent.read_text().splitlines():
+            if line.startswith("HID_ID="):
+                _, vid_hex, pid_hex = line.split("=", 1)[1].split(":")
+                return int(vid_hex, 16), int(pid_hex, 16)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def find_battery_hidraw():
-    """Return the /dev/hidrawN whose report descriptor is our vendor interface."""
+    """Return the /dev/hidrawN that is our dongle's vendor interface.
+
+    Matches on BOTH our VID:PID and the vendor report-descriptor prefix, since
+    the prefix alone collides with other vendor HID devices on the system.
+    """
     for sys_path in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
-        name = os.path.basename(sys_path)
+        if hidraw_vid_pid(sys_path) != (DONGLE_VID, DONGLE_PID):
+            continue
         desc = Path(sys_path) / "device" / "report_descriptor"
         try:
             head = desc.read_bytes()[: len(VENDOR_DESC_PREFIX)]
         except OSError:
             continue
         if head == VENDOR_DESC_PREFIX:
-            return f"/dev/{name}"
+            return f"/dev/{os.path.basename(sys_path)}"
     return None
 
 
