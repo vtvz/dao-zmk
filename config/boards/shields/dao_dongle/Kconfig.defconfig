@@ -3,9 +3,10 @@
 
 if SHIELD_DAO_DONGLE
 
-# Product string. The host battery model shows as "<manufacturer> <product>",
-# i.e. "Dao Keyboard" (manufacturer set in dao_dongle.conf). Also used as the
-# dongle's BT_DEVICE_NAME (the central's own name; not normally user-visible).
+# USB product string. The host battery model shows as "<manufacturer> <product>",
+# i.e. "Dao Keyboard" (manufacturer set in dao_dongle.conf). The BLE name is
+# set separately in dao_dongle.conf so the dongle isn't an anonymous "Keyboard"
+# in BLE scanners/pairing lists.
 config ZMK_KEYBOARD_NAME
     default "Keyboard"
 

@@ -8,6 +8,8 @@ import org.kde.kirigami as Kirigami
 PlasmoidItem {
     id: root
 
+    // The dongle auto-detects which slot is the left half from keystroke
+    // positions, so "left"/"right" here are already the physical sides.
     property bool connected: false
     property var leftPct: null
     property var rightPct: null
@@ -28,7 +30,13 @@ PlasmoidItem {
             if (!out) { root.connected = false; return }
             try {
                 var s = JSON.parse(out)
-                root.connected = !!s.connected
+                // The reader touches the file at least every few seconds while
+                // it is alive (firmware re-sends every 3s; disconnect loop
+                // rewrites every 3s). A stale `updated` means the reader died —
+                // don't trust its last `connected: true` forever.
+                var fresh = s.updated !== undefined
+                    && (Date.now() / 1000 - s.updated) < 30
+                root.connected = !!s.connected && fresh
                 root.leftPct = (s.left === null || s.left === undefined) ? null : s.left
                 root.rightPct = (s.right === null || s.right === undefined) ? null : s.right
             } catch (e) {

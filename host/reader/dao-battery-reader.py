@@ -119,6 +119,9 @@ def main():
                     rid, l, r = struct.unpack("BBB", report)
                     if rid != REPORT_ID:
                         continue
+                    # The dongle auto-detects which slot is which side from
+                    # keystroke positions, so [left, right] arrive already in
+                    # physical order.
                     left, right = l, r
                     write_state(left, right, connected=True)
         except OSError as e:
