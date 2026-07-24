@@ -60,7 +60,8 @@ ZMK reports battery only over the **BLE HID Battery Service**, never over USB HI
   - **`HID_1` — vendor L/R** (Usage Page `0xFF00`): pushes a 3-byte report `[0x01, left%, right%]` (`0xFF` = unknown) on each peripheral battery event. Feeds the custom widget below.
   - **`HID_2` — native battery**: the standard Generic Device Controls **Battery Strength** usage (`0x06`/`0x20`), reporting the **worse of the two halves** (min). The Linux kernel auto-maps this to a `power_supply` (shows in `upower` / the KDE tray natively, like a wireless mouse's battery). The device is renamed to **"Dao Keyboard"** via `USB_DEVICE_MANUFACTURER="Dao"` + product name `"Keyboard"` (in `dao_dongle.conf` / `Kconfig.defconfig`).
     - **Kernel gotcha:** Linux only keeps a HID battery if the interface *also* registers a real input device (`hidinput_has_been_populated()` ignores `EV_PWR`) — a battery-only interface is torn down and the battery orphaned. So the battery usage is wrapped in a **minimal dummy keyboard** (modifier byte always 0 + reserved byte + battery, in one INPUT report). This creates a harmless phantom "Dao Keyboard" input device that never sends a keypress. Reusing ZMK's real keyboard interface would be cleaner but its descriptor lives in ZMK core (`zmk/app/src/hid.c`, an unedited upstream checkout).
-- **Events fire only on change.** ZMK's `battery.c` raises `battery_state_changed` only when the percentage differs from last — `CONFIG_ZMK_BATTERY_REPORT_INTERVAL` (60s here) controls measurement, not emission. A freshly started host reader therefore shows nothing until the first change.
+- **Events fire only on change.** ZMK's `battery.c` raises `battery_state_changed` only when the percentage differs from last — `CONFIG_ZMK_BATTERY_REPORT_INTERVAL` (60s here) controls measurement, not emission. To compensate, the dongle re-sends the vendor report every 3s (`RESEND_INTERVAL_S` in `battery_hid.c`), so a freshly started host reader sees values within seconds.
+- **Left/right is auto-detected.** ZMK assigns peripheral slots by bonding order, not physical side — but key positions are global (left half = columns 0-5 of the dongle transform), so `battery_hid.c` learns each slot's side from the first keypress and always emits the vendor report in true [left, right] order.
 
 **Host side (`host/`, KDE Plasma 6 on Linux):**
 
@@ -68,7 +69,7 @@ ZMK reports battery only over the **BLE HID Battery Service**, never over USB HI
 - `host/systemd/dao-battery-reader.service` — runs the reader as a user service.
 - `host/plasmoid/dao-battery/` — Plasma 6 plasmoid. Reads the state file via a `plasma5support` **executable DataSource** (plasmashell blocks `file://` XHR). Compact rep = keyboard glyph flanked by two L/R fill bars; popup mirrors them.
 - `host/udev/99-dao-dongle-battery.rules` — grants access via `GROUP="input"` (add user with `usermod -aG input`). NOT via `TAG+="uaccess"`: systemd 258+ has a regression where uaccess ACLs aren't applied to `/dev/hidraw*`.
-- `host/install.sh` — installs all of the above; `just widget-install` reinstalls just the plasmoid.
+- `host/install.sh` — installs all of the above; `just widget-install` reinstalls the reader + user service + plasmoid and restarts both.
 
 ## Flashing order
 

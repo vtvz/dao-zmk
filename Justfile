@@ -67,7 +67,8 @@ widget-install:
     "$HOME/.config/systemd/user/dao-battery-reader.service"
   systemctl --user daemon-reload
   systemctl --user restart dao-battery-reader.service
-  # Plasma widget -> upgrade + reload plasmashell
-  kpackagetool6 --type Plasma/Applet --upgrade host/plasmoid/dao-battery
+  # Plasma widget -> upgrade (or first-time install) + reload plasmashell
+  kpackagetool6 --type Plasma/Applet --upgrade host/plasmoid/dao-battery \
+    || kpackagetool6 --type Plasma/Applet --install host/plasmoid/dao-battery
   kquitapp6 plasmashell || true
   kstart plasmashell
