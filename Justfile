@@ -12,11 +12,15 @@ build-part board shield="" cmake_args="":
   shield="{{ shield }}"
   cmake_args="{{ cmake_args }}"
 
+  # Board ids can contain '/' (Zephyr variants, e.g. xiao_ble//zmk). Keep the
+  # real id for `-b`, but flatten '/' -> '_' for build dir / output filenames.
+  board_slug="${board//\//_}"
+
   if [ -n "$shield" ]; then
-    build_name="${shield}-${board}"
+    build_name="${shield}-${board_slug}"
     shield_arg="-DSHIELD=${shield}"
   else
-    build_name="${board}"
+    build_name="${board_slug}"
     shield_arg=""
   fi
 
@@ -51,3 +55,20 @@ build:
   echo "All builds completed!"
   ls -la build/*.uf2
   echo "=========================================="
+
+# (host) Reinstall the reader + user service + KDE widget, then restart both.
+widget-install:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # Reader script -> ~/.local/bin (matches the service's ExecStart)
+  install -Dm 0755 host/reader/dao-battery-reader.py "$HOME/.local/bin/dao-battery-reader.py"
+  # User service -> reload + restart so changes take effect
+  install -Dm 0644 host/systemd/dao-battery-reader.service \
+    "$HOME/.config/systemd/user/dao-battery-reader.service"
+  systemctl --user daemon-reload
+  systemctl --user restart dao-battery-reader.service
+  # Plasma widget -> upgrade (or first-time install) + reload plasmashell
+  kpackagetool6 --type Plasma/Applet --upgrade host/plasmoid/dao-battery \
+    || kpackagetool6 --type Plasma/Applet --install host/plasmoid/dao-battery
+  kquitapp6 plasmashell || true
+  kstart plasmashell

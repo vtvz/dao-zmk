@@ -3,8 +3,12 @@
 
 if SHIELD_DAO_DONGLE
 
+# USB product string. The host battery model shows as "<manufacturer> <product>",
+# i.e. "Dao Keyboard" (manufacturer set in dao_dongle.conf). The BLE name is
+# set separately in dao_dongle.conf so the dongle isn't an anonymous "Keyboard"
+# in BLE scanners/pairing lists.
 config ZMK_KEYBOARD_NAME
-    default "dao_dongle"
+    default "Keyboard"
 
 config ZMK_SPLIT_ROLE_CENTRAL
     default y
@@ -12,4 +16,10 @@ config ZMK_SPLIT_ROLE_CENTRAL
 config ZMK_SPLIT
     default y
 
+# Expose left/right peripheral battery levels via a custom USB HID report,
+# read on the host by zmk-split-battery-tray (see config/src/battery_hid.c).
+config ZMK_SPLIT_BATTERY_HID_REPORT
+    bool "Expose left/right peripheral battery levels via a custom USB HID report"
+    default y
+    depends on ZMK_USB && ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING
 endif

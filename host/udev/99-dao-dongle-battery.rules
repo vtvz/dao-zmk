@@ -1,0 +1,21 @@
+# Grant the active-session user read access to the dao_dongle's hidraw nodes.
+# The dongle (VID:PID 1d50:615e) exposes two HID interfaces: the keyboard and
+# a vendor-defined battery interface (Usage Page 0xFF00, see config/src/battery_hid.c).
+# A reader picks the battery one by checking the report descriptor prefix 06 00 ff.
+#
+# Install:
+#   sudo cp host/udev/99-dao-dongle-battery.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   (replug the dongle)
+#
+# Access is granted via GROUP="input" (add your user to it once:
+#   sudo usermod -aG input $USER   then log out/in).
+#
+# We deliberately use group ownership instead of relying solely on TAG+="uaccess":
+# systemd 258+ has a regression where the uaccess ACL is NOT applied to
+# /dev/hidraw* nodes, so on those versions group perms are what actually works.
+# The uaccess tag is kept as well — harmless, and it'll grant an ACL again once
+# the systemd bug is fixed, so no rule change is needed later.
+#
+# Match on KERNEL=="hidraw*" scoped to our dongle's VID:PID via the parent USB device.
+KERNEL=="hidraw*", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="615e", MODE="0660", GROUP="input", TAG+="uaccess"

@@ -1,0 +1,17 @@
+[Unit]
+Description=Dao dongle per-half battery reader (USB HID -> state file)
+Documentation=https://github.com/bogamie/zmk-split-battery-tray
+# Restart if it exits (e.g. dongle unplugged and the read loop bails).
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# The reader is installed to ~/.local/bin by install.sh / `just widget-install`
+# (%h = user home), so this is independent of where the repo is cloned.
+ExecStart=/usr/bin/python3 %h/.local/bin/dao-battery-reader.py
+Environment=DAO_BATTERY_STATE=%h/.local/state/dao-battery.json
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
